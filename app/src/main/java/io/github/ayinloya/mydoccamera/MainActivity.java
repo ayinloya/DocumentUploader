@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     File mfile;
     Button uploadButton;
+    Button takePicButton;
 
     void setViews() {
         imageView = findViewById(R.id.image_preview);
@@ -71,7 +72,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 uploadFile(mfile, "2");
             }
         });
-        Button takePicButton = findViewById(R.id.take_pic_btn);
+        takePicButton = findViewById(R.id.take_pic_btn);
         takePicButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -79,7 +80,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         });
 
-
+        updateViews();
     }
 
 
@@ -110,6 +111,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 mfile = file.getAbsoluteFile();
             }
         }
+
+        updateViews();
     }
 
 
@@ -140,7 +143,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
 
-    private void uploadFile(File file, String userId) {
+    private void uploadFile(final File file, String userId) {
 
         showProgress(true);
         //creating request body for file
@@ -175,6 +178,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         call.enqueue(new Callback<Void>() {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
+                mfile = null;
                 showProgress(false);
                 if (response.isSuccessful()) {
                     Toast.makeText(getApplicationContext(), "File Uploaded Successfully...", Toast.LENGTH_LONG).show();
@@ -195,12 +199,13 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private void showProgress(boolean show) {
         if (show) {
             uploadButton.setVisibility(View.GONE);
-            imageView.setVisibility(View.INVISIBLE);
+            takePicButton.setVisibility(View.GONE);
+
             progress.setVisibility(View.VISIBLE);
             return;
         }
+        progress.setVisibility(View.GONE);
         updateViews();
-        progress.setVisibility(View.VISIBLE);
     }
 
     private void updateViews() {
@@ -211,6 +216,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             uploadButton.setVisibility(View.VISIBLE);
             imageView.setVisibility(View.VISIBLE);
         }
+        takePicButton.setVisibility(View.VISIBLE);
+
     }
 
     private void prepareCamera() {
