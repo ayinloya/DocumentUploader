@@ -2,19 +2,18 @@ package io.github.ayinloya.mydoccamera;
 
 
 import android.Manifest;
-import android.content.Context;
-import android.content.ContextWrapper;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.net.Uri;
+import android.media.MediaScannerConnection;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,18 +24,22 @@ import androidx.core.app.ActivityCompat;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.soundcloud.android.crop.Crop;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Calendar;
 
 import io.github.ayinloya.mydoccamera.api.Api;
-import io.github.ayinloya.mydoccamera.api.FileResponse;
 import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
     public static final int MY_DOC_CAMERA_PERMISSIONS_REQUEST_CAMERA = 10;
@@ -44,6 +47,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public static final int MY_DOC_REQUEST_IMAGE_CAPTURE = 12;
     final String TAG = MainActivity.class.getSimpleName();
     private ImageView imageView;
+    private ProgressBar progress;
 
 
     @Override
@@ -53,10 +57,14 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         setViews();
     }
-File mfile;
+
+    File mfile;
+    Button uploadButton;
+
     void setViews() {
         imageView = findViewById(R.id.image_preview);
-        Button uploadButton = findViewById(R.id.upload_btn);
+        progress = findViewById(R.id.progress);
+        uploadButton = findViewById(R.id.upload_btn);
         uploadButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -70,6 +78,8 @@ File mfile;
                 prepareCamera();
             }
         });
+
+
     }
 
 
@@ -92,46 +102,56 @@ File mfile;
             String path = Crop.getOutput(data).getPath();
 
         } else if (requestCode == MY_DOC_REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            Bundle extras = data.getExtras();
-            Bitmap imageBitmap = (Bitmap) extras.get("data");
 
-            imageView.setImageBitmap(imageBitmap);
-
-            mfile =  saveToInternalStorage(imageBitmap);
-
-        }
-    }
-
-    private File saveToInternalStorage(Bitmap bitmapImage){
-        ContextWrapper cw = new ContextWrapper(getApplicationContext());
-        File directory = cw.getDir("imageDir", Context.MODE_PRIVATE);
-        // Create imageDir
-        File mypath=new File(directory,"doc.jpg");
-
-        FileOutputStream fos = null;
-        try {
-            fos = new FileOutputStream(mypath);
-            // Use the compress method on the BitMap object to write image to the OutputStream
-            bitmapImage.compress(Bitmap.CompressFormat.PNG, 100, fos);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                fos.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            Bitmap thumbnail = (Bitmap) data.getExtras().get("data");
+            imageView.setImageBitmap(thumbnail);
+            File file = saveImage(thumbnail);
+            if (file != null) {
+                mfile = file.getAbsoluteFile();
             }
         }
-        return mypath;
     }
 
 
-    private void uploadFile(File file, String id) {
+    public File saveImage(Bitmap myBitmap) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        myBitmap.compress(Bitmap.CompressFormat.JPEG, 90, bytes);
+        File wallpaperDirectory = new File(getCacheDir() + getResources().getString(R.string.app_name));
+        if (!wallpaperDirectory.exists()) {  // have the object build the directory structure, if needed.
+            wallpaperDirectory.mkdirs();
+        }
+
+        try {
+            File f = new File(wallpaperDirectory, Calendar.getInstance().getTimeInMillis() + ".jpg");
+            f.createNewFile();
+            FileOutputStream fo = new FileOutputStream(f);
+            fo.write(bytes.toByteArray());
+            MediaScannerConnection.scanFile(this,
+                    new String[]{f.getPath()},
+                    new String[]{"image/jpeg"}, null);
+            fo.close();
+            Log.d("TAG", "File Saved::---&gt;" + f.getAbsolutePath());
+
+            return f;
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+        return null;
+    }
 
 
+    private void uploadFile(File file, String userId) {
+
+        showProgress(true);
         //creating request body for file
-        RequestBody requestFile = RequestBody.create(MediaType.parse(file.getAbsolutePath()), file);
-        RequestBody descBody = RequestBody.create(MediaType.parse("text/plain"), id);
+        MultipartBody.Part fileImage = null;
+        if (file != null) {
+
+            RequestBody avatarImageC = RequestBody.create(MediaType.parse("multipart/form-data"), file);
+            fileImage = MultipartBody.Part.createFormData("document", file.getName(), avatarImageC);
+        }
+        RequestBody idBody = RequestBody.create(MediaType.parse("multipart/form-data"), userId);
+
 
         //The gson builder
         Gson gson = new GsonBuilder()
@@ -141,6 +161,7 @@ File mfile;
 
         //creating retrofit object
         Retrofit retrofit = new Retrofit.Builder()
+                .addConverterFactory(GsonConverterFactory.create(gson))
                 .baseUrl(Api.BASE_URL)
                 .build();
 
@@ -148,12 +169,13 @@ File mfile;
         Api api = retrofit.create(Api.class);
 
         //creating a call and calling the upload image method
-        Call<FileResponse> call = api.uploadImage(requestFile, descBody);
+        Call<Void> call = api.uploadImage(fileImage, idBody);
 
         //finally performing the call
-        call.enqueue(new Callback<FileResponse>() {
+        call.enqueue(new Callback<Void>() {
             @Override
-            public void onResponse(Call<FileResponse> call, Response<FileResponse> response) {
+            public void onResponse(Call<Void> call, Response<Void> response) {
+                showProgress(false);
                 if (response.isSuccessful()) {
                     Toast.makeText(getApplicationContext(), "File Uploaded Successfully...", Toast.LENGTH_LONG).show();
                 } else {
@@ -162,10 +184,33 @@ File mfile;
             }
 
             @Override
-            public void onFailure(Call<FileResponse> call, Throwable t) {
+            public void onFailure(Call<Void> call, Throwable t) {
+                showProgress(false);
+                t.printStackTrace();
                 Toast.makeText(getApplicationContext(), t.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void showProgress(boolean show) {
+        if (show) {
+            uploadButton.setVisibility(View.GONE);
+            imageView.setVisibility(View.INVISIBLE);
+            progress.setVisibility(View.VISIBLE);
+            return;
+        }
+        updateViews();
+        progress.setVisibility(View.VISIBLE);
+    }
+
+    private void updateViews() {
+        if (mfile == null) {
+            uploadButton.setVisibility(View.GONE);
+            imageView.setVisibility(View.INVISIBLE);
+        } else {
+            uploadButton.setVisibility(View.VISIBLE);
+            imageView.setVisibility(View.VISIBLE);
+        }
     }
 
     private void prepareCamera() {

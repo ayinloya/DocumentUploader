@@ -1,5 +1,6 @@
 package io.github.ayinloya.mydoccamera.api;
 
+import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.http.Multipart;
@@ -10,10 +11,9 @@ public interface Api {
 
     String BASE_URL = "https://stage.appruve.co/v1/verifications/test/";
 
-    //this is our multipart request
-    //we have two parameters on is name and other one is description
+
     @Multipart
     @POST("file_upload")
-    Call<FileResponse> uploadImage(@Part("document\"; filename=\"document.jpg\" ") RequestBody file, @Part("user_id") RequestBody desc);
+    Call<Void> uploadImage(@Part MultipartBody.Part document, @Part("user_id") RequestBody userId);
 
 }
