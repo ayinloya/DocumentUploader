@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">MyDocCamera</string>
+    <string name="welcome_to_document_app">Welcome to document app</string>
+    <string name="upload_document">Upload Document</string>
+
+    <string name="title_activity_my_camera">MyCamera</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+    <string name="camera_not_available_on_device">Camera not available on device</string>
+</resources>
